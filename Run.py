@@ -1,10 +1,3 @@
-# =========================================================
-# smart_attendance_scheduler.py
-# =========================================================
-# Manages scheduled attendance sessions using APScheduler.
-# Designed for API-based frame uploads (no local webcam).
-# =========================================================
-
 from datetime import datetime
 from apscheduler.schedulers.background import BackgroundScheduler
 from main import mark_attendance
@@ -143,3 +136,4 @@ def record_recognition_results(recognized_names):
             attendance_records[name] = attendance_records.get(name, 0) + 1
 
     return jsonify({"status": "recorded", "updated": attendance_records})
+
