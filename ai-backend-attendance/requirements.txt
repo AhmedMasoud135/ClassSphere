@@ -1,0 +1,21 @@
+flask==2.3.3
+flask-cors==4.0.0
+opencv-python==4.8.1.78
+# Pin a TF 2.10-compatible NumPy to avoid binary mismatches on Windows
+numpy==1.23.5
+# DeepFace compatible with TF/Keras 2.10
+deepface==0.0.79
+# Last Windows-friendly CPU TensorFlow via pip
+tensorflow==2.10.1
+keras==2.10.0
+# Protobuf pin compatible with TF 2.10.x (and fixes descriptor error)
+protobuf==3.19.6
+# HDF5 support for some Keras model loads
+h5py==3.8.0
+scikit-learn==1.3.0
+pickle-mixin==1.0.2
+apscheduler==3.10.4
+firebase-admin==6.2.0
+google-cloud-firestore==2.11.1
+python-dotenv==1.0.0
+Pillow==10.0.0
