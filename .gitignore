@@ -1,0 +1,45 @@
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+venv/
+env/
+.venv/
+*.egg-info/
+
+# ===== Node / Frontend =====
+node_modules/
+.next/
+.vercel/
+dist/
+build/
+.cache/
+
+# ===== System =====
+.DS_Store
+Thumbs.db
+
+# ===== IDE =====
+.vscode/
+.idea/
+
+# ===== Data / Models =====
+*.onnx
+*.pkl
+*.h5
+*.pt
+*.npy
+*.npz
+
+# ===== Media =====
+*.jpg
+*.jpeg
+*.png
+*.gif
+*.mp4
+*.mov
+*.avi
+
+# ===== Logs =====
+*.log
