@@ -20,7 +20,7 @@ app = FastAPI(
 
 # Load model only once on startup
 model = load_model()
-predictor = ViolencePredictor(model, DEVICE, threshold=0.7)
+predictor = ViolencePredictor(model, DEVICE, threshold=0.5)
 print("[INFO] Violence detection model loaded successfully.")
 
 
@@ -94,5 +94,6 @@ async def predict_frame(file: UploadFile = File(...)):
         "probability": round(float(prob), 4),
         "violence": bool(pred)
     }
+
 
 
