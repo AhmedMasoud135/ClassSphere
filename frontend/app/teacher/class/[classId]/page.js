@@ -32,7 +32,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from '@/components/ui/accordion';
-import { PlusCircle, Video, Users } from 'lucide-react';
+import { PlusCircle, Video, Users, AlertTriangle } from 'lucide-react';
 import { motion } from 'framer-motion';
 import Spinner from '@/app/components/Spinner';
 
@@ -138,6 +138,14 @@ export default function TeacherClassPage() {
                 className="rounded-xl border-2 border-pink-300 hover:bg-pink-50"
               >
                 <Video className="mr-2 h-4 w-4 text-pink-600" /> Live Attendance
+              </Button>
+            </Link>
+            <Link href={`/teacher/class/${classId}/violence`}>
+              <Button
+                variant="outline"
+                className="rounded-xl border-2 border-red-300 hover:bg-red-50"
+              >
+                <AlertTriangle className="mr-2 h-4 w-4 text-red-600" /> Violence Detection
               </Button>
             </Link>
             <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
