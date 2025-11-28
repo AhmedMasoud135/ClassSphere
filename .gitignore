@@ -44,3 +44,6 @@ Thumbs.db
 # ===== Logs =====
 *.log
 PRESENTATION_GUIDE.md
+
+serviceAccountKey.json
+summarize_quiz_generator/serviceAccountKey.json
