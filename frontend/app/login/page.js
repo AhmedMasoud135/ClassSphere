@@ -89,9 +89,6 @@ export default function LoginPage() {
         </div>
       </Card>
 
-      <footer className="absolute bottom-6 text-white/80 text-sm">
-        © 2024 School Portal. All rights reserved.
-      </footer>
     </main>
   );
 }

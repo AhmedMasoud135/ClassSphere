@@ -21,7 +21,9 @@ import {
   AccordionTrigger,
 } from '@/components/ui/accordion';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { CalendarCheck } from 'lucide-react';
+import { CalendarCheck, FileAudio } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import Link from 'next/link';
 import Spinner from '@/app/components/Spinner';
 
 export default function StudentClassPage() {
@@ -100,9 +102,17 @@ export default function StudentClassPage() {
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 p-6 animate-fadeIn">
       <div className="max-w-7xl mx-auto grid lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2">
-          <h1 className="text-3xl font-bold mb-6 text-gray-800">
-            {classData?.className}
-          </h1>
+          <div className="flex justify-between items-center mb-6">
+            <h1 className="text-3xl font-bold text-gray-800">
+              {classData?.className}
+            </h1>
+            <Link href={`/student/class/${classId}/sessions`}>
+              <Button className="bg-purple-500 hover:bg-purple-600 text-white rounded-xl">
+                <FileAudio className="mr-2 h-4 w-4" />
+                Session Materials
+              </Button>
+            </Link>
+          </div>
           <h2 className="text-xl font-semibold mb-4 text-gray-700">
             Lesson Summaries
           </h2>

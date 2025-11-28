@@ -16,12 +16,32 @@ export const AuthContextProvider = ({ children }) => {
       if (currentUser) {
         // If user is authenticated, get their document from Firestore
         const userDocRef = doc(db, 'users', currentUser.uid);
-        const userDoc = await getDoc(userDocRef);
-        if (userDoc.exists()) {
-          // Set user state with combined auth and firestore data
-          setUser({ ...currentUser, ...userDoc.data() });
-        } else {
-          // Handle case where user exists in Auth but not Firestore
+        try {
+          const userDoc = await getDoc(userDocRef);
+          if (userDoc.exists()) {
+            // Set user state with combined auth and firestore data
+            setUser({ ...currentUser, ...userDoc.data() });
+          } else {
+            // Handle case where user exists in Auth but not Firestore
+            setUser(currentUser);
+          }
+        } catch (err) {
+          // Log detailed error info to help debug Firestore permission issues
+          // This error typically means Firestore security rules blocked the read
+          try {
+            console.error('Firestore getDoc error for user:', currentUser.uid);
+            // Log known FirebaseError fields explicitly (some are non-enumerable)
+            console.error('error.name:', err?.name);
+            console.error('error.code:', err?.code);
+            console.error('error.message:', err?.message);
+            console.error('error.stack:', err?.stack);
+            // Also log the raw object for completeness
+            console.error('error object:', err);
+          } catch (logErr) {
+            // If logging fails for any reason, at least log the raw value
+            console.error('Error logging failed value:', err, logErr);
+          }
+          // Fall back to the auth user object so app can continue
           setUser(currentUser);
         }
       } else {

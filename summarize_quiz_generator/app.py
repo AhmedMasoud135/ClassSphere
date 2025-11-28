@@ -1,4 +1,5 @@
 from flask import Flask, request, jsonify
+from flask_cors import CORS
 import os
 import time
 from transcription.transcription import transcribe_audio
@@ -7,6 +8,7 @@ from utils.quiz_utils import parse_quiz_text, calculate_quiz_score
 from firebase_integration import get_firebase_manager
 
 app = Flask(__name__)
+CORS(app)  # Enable CORS for all routes
 
 # Initialize Firebase manager
 try:

@@ -1,0 +1,51 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Users collection - users can read/write their own document
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Classes collection
+    match /classes/{classId} {
+      // Anyone authenticated can read classes (needed for join functionality)
+      allow read: if request.auth != null;
+      
+      // Teachers can create classes (check teacherId matches auth uid)
+      allow create: if request.auth != null 
+                    && request.resource.data.teacherId == request.auth.uid;
+      
+      // Only the teacher who owns the class can update/delete it
+      allow update, delete: if request.auth != null 
+                            && resource.data.teacherId == request.auth.uid;
+    }
+    
+    // Summaries collection (class summaries/notes)
+    match /summaries/{summaryId} {
+      // Teachers can read summaries for their classes
+      // Students can read summaries for classes they're enrolled in
+      allow read: if request.auth != null;
+      
+      // Only teachers can create/update/delete summaries for their classes
+      allow create: if request.auth != null;
+      allow update, delete: if request.auth != null;
+    }
+    
+    // Attendance collection
+    match /attendance/{attendanceId} {
+      // Teachers and students can read attendance records
+      allow read: if request.auth != null;
+      
+      // Only teachers can create/update/delete attendance records
+      allow create, update, delete: if request.auth != null;
+    }
+    
+    // Catch-all for any other collections (adjust as needed)
+    // Remove this in production and add specific rules for each collection
+    match /{document=**} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}

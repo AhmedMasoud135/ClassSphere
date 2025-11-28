@@ -2,7 +2,7 @@
 
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore'; // This line is the fix
+import { getFirestore, setLogLevel } from 'firebase/firestore'; // Enable debug logging when needed
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -16,5 +16,13 @@ const firebaseConfig = {
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 const auth = getAuth(app);
 const db = getFirestore(app); // This line will now work correctly
+
+// Enable Firestore SDK debug logs to help diagnose permission/listen errors locally.
+// Comment this out if logs are too verbose in production.
+try {
+  setLogLevel('debug');
+} catch (e) {
+  // ignore if running in an environment that doesn't support debug setting
+}
 
 export { app, auth, db };
