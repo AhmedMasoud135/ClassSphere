@@ -33,9 +33,7 @@ def home():
         }
     })
 
-# ============================================================
-# INTEGRATED ENDPOINTS (with Firebase)
-# ============================================================
+
 
 @app.route('/process-session-audio', methods=['POST'])
 def process_session_audio():
