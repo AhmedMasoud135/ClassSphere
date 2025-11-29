@@ -4,6 +4,7 @@ Main Flask application with Firebase integration for Smart Attendance System.
 This version replaces global variables with Firebase database storage.
 """
 
+
 import os
 import io
 import json
@@ -16,15 +17,19 @@ from datetime import datetime
 from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
 
+
 # Import Firebase configuration
 from firebase_config import get_firebase_manager, initialize_firebase
+
 
 import main  
 import Run as scheduler_module  
 import Student_Manage as student_manage  
 
+
 # We need to safely import manage_embeddings from EncodeGenerator 
 import ast
+
 
 def safe_load_manage_embeddings(module_path="EncodeGenerator.py"):
     """
@@ -35,8 +40,10 @@ def safe_load_manage_embeddings(module_path="EncodeGenerator.py"):
     if not os.path.exists(module_path):
         raise FileNotFoundError(f"{module_path} not found")
 
+
     source = open(module_path, "r", encoding="utf-8").read()
     parsed = ast.parse(source, filename=module_path)
+
 
     # Build a new AST that contains only the function def for manage_embeddings
     new_body = []
@@ -47,8 +54,10 @@ def safe_load_manage_embeddings(module_path="EncodeGenerator.py"):
         elif isinstance(node, ast.FunctionDef) and node.name == "manage_embeddings":
             new_body.append(node)
 
+
     new_module = ast.Module(body=new_body, type_ignores=[])
     ast.fix_missing_locations(new_module)
+
 
     # Compile and exec in a fresh namespace
     namespace = {}
@@ -58,6 +67,7 @@ def safe_load_manage_embeddings(module_path="EncodeGenerator.py"):
         raise RuntimeError("manage_embeddings function not found in module")
     return namespace["manage_embeddings"]
 
+
 # Try to load manage_embeddings safely
 try:
     manage_embeddings = safe_load_manage_embeddings("EncodeGenerator.py")
@@ -66,17 +76,21 @@ except Exception as e:
     print("⚠️ Warning: could not load manage_embeddings safely:", str(e))
     print(traceback.format_exc())
 
+
 # Flask app setup
 app = Flask(__name__)
 CORS(app)
 
-# Initialize Firebase
+
+# Initialize Firebase (with error handling)
+firebase_manager = None
 try:
     firebase_manager = initialize_firebase()
     print("✅ Firebase initialized successfully")
 except Exception as e:
-    print(f"❌ Failed to initialize Firebase: {e}")
+    print(f"⚠️ Firebase initialization failed (will use CSV fallback): {e}")
     firebase_manager = None
+
 
 # Configuration (paths used across modules)
 BASE_DIR = "Smart Attendance System"
@@ -84,9 +98,11 @@ STUDENTS_DIR = os.path.join(BASE_DIR, "Images")
 EMBEDDINGS_PATH = getattr(main, "EMBEDDINGS_PATH", "embeddings.pkl")
 ATTENDANCE_PREFIX = "attendance_"  # main.save_attendance produces attendance_{session}.csv
 
+
 # Ensure directories exist
 os.makedirs(STUDENTS_DIR, exist_ok=True)
 os.makedirs(BASE_DIR, exist_ok=True)
+
 
 # ------------------------------
 # Helpers
@@ -97,6 +113,7 @@ def decode_base64_image(data_b64):
         data_b64 = data_b64.split(",")[1]
     return base64.b64decode(data_b64)
 
+
 def save_temp_image_bytes(bytes_data, suffix=".jpg"):
     """Save bytes to a temp file path and return the path (caller should remove)."""
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
@@ -104,6 +121,7 @@ def save_temp_image_bytes(bytes_data, suffix=".jpg"):
     tmp.flush()
     tmp.close()
     return tmp.name
+
 
 def parse_recognize_response(flask_response):
     """
@@ -116,6 +134,7 @@ def parse_recognize_response(flask_response):
     except Exception:
         return {"status": "error", "message": "Failed to parse recognition response"}
 
+
 # ------------------------------
 # Routes - Health
 # ------------------------------
@@ -124,7 +143,7 @@ def home():
     return jsonify({
         "status": "running",
         "message": "Smart Attendance System API with Firebase",
-        "firebase_status": "connected" if firebase_manager else "disconnected",
+        "firebase_status": "connected" if firebase_manager else "disconnected (using CSV fallback)",
         "endpoints": {
             "POST /recognize_image": "Upload image (base64 or file) for recognition",
             "POST /add_student": "Add student with list of base64 images",
@@ -139,9 +158,11 @@ def home():
         }
     })
 
+
 # ------------------------------
-# New Firebase-based Routes
+# New Firebase-based Routes (with error handling)
 # ------------------------------
+
 
 @app.route("/start_session", methods=["POST"])
 def start_session():
@@ -153,17 +174,17 @@ def start_session():
         if not class_id:
             return jsonify({"error": "classId is required"}), 400
         
-        if not firebase_manager:
-            return jsonify({"error": "Firebase not initialized"}), 500
-        
         # Clear any existing session data for this class then start a new one
         scheduler_module.clear_session_data(class_id)
         start_resp = scheduler_module.start_session(class_id)
+        
         # Return the scheduler's response JSON
         return start_resp
         
     except Exception as e:
+        app.logger.error(f"Failed to start session: {e}")
         return jsonify({"error": f"Failed to start session: {str(e)}"}), 500
+
 
 @app.route("/stop_session", methods=["POST"])
 def stop_session():
@@ -175,80 +196,103 @@ def stop_session():
         if not class_id:
             return jsonify({"error": "classId is required"}), 400
         
-        if not firebase_manager:
-            return jsonify({"error": "Firebase not initialized"}), 500
-        
         # Stop the session and get summary (includes duration)
         stop_resp = scheduler_module.stop_session(class_id)
         session_data = parse_recognize_response(stop_resp)
+        
         if not session_data or session_data.get("status") == "inactive":
             return jsonify({"error": "No active session found"}), 400
         
-        # Save attendance records to Firebase
+        # Save attendance records to Firebase (with error handling)
         attendance_records = session_data.get('attendance_records', {})
         success_count = 0
         
-        for student_name, presence_time in attendance_records.items():
-            # Calculate attendance percentage
-            session_duration = session_data.get('duration_seconds', 60)
-            attendance_percentage = (presence_time / session_duration) * 100 if session_duration > 0 else 0
-            
-            # Save to Firebase
-            success = firebase_manager.save_attendance_record(
-                class_id=class_id,
-                student_id=student_name,
-                status="present" if attendance_percentage >= 25 else "absent",
-                additional_data={
-                    'presence_time': presence_time,
-                    'attendance_percentage': attendance_percentage,
-                    'session_duration': session_duration
-                }
-            )
-            
-            if success:
-                success_count += 1
+        if firebase_manager:
+            for student_name, presence_time in attendance_records.items():
+                try:
+                    # Calculate attendance percentage
+                    session_duration = session_data.get('duration_seconds', 60)
+                    attendance_percentage = (presence_time / session_duration) * 100 if session_duration > 0 else 0
+                    
+                    # Save to Firebase
+                    success = firebase_manager.save_attendance_record(
+                        class_id=class_id,
+                        student_id=student_name,
+                        status="present" if attendance_percentage >= 25 else "absent",
+                        additional_data={
+                            'presence_time': presence_time,
+                            'attendance_percentage': attendance_percentage,
+                            'session_duration': session_duration
+                        }
+                    )
+                    
+                    if success:
+                        success_count += 1
+                except Exception as e:
+                    print(f"⚠️ Error saving attendance record for {student_name} (ignored): {e}")
         
-        # Save session data
+        # Save session data to Firebase (with error handling)
         session_id = f"{class_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-        firebase_manager.save_session_data(
-            session_id=session_id,
-            session_name=session_data.get('session_name', 'Unknown'),
-            start_time=datetime.fromisoformat(session_data.get('start_time')) if session_data.get('start_time') else datetime.now(),
-            end_time=datetime.fromisoformat(session_data.get('end_time')) if session_data.get('end_time') else datetime.now(),
-            duration_minutes=session_data.get('duration_seconds', 60) // 60,
-            recognized_students=list(attendance_records.keys())
-        )
+        
+        if firebase_manager:
+            try:
+                firebase_manager.save_session_data(
+                    session_id=session_id,
+                    session_name=session_data.get('session_name', 'Unknown'),
+                    start_time=datetime.fromisoformat(session_data.get('start_time')) if session_data.get('start_time') else datetime.now(),
+                    end_time=datetime.fromisoformat(session_data.get('end_time')) if session_data.get('end_time') else datetime.now(),
+                    duration_minutes=session_data.get('duration_seconds', 60) // 60,
+                    recognized_students=list(attendance_records.keys())
+                )
+                print(f"✅ Session data saved to Firebase: {session_id}")
+            except Exception as e:
+                print(f"⚠️ Error saving session data to Firebase (ignored): {e}")
         
         return jsonify({
-            "message": "Session stopped and attendance saved to Firebase",
+            "message": "Session stopped and attendance saved",
             "classId": class_id,
             "records_saved": success_count,
             "total_students": len(attendance_records),
-            "session_id": session_id
+            "session_id": session_id,
+            "firebase_status": "connected" if firebase_manager else "disconnected (CSV saved)"
         })
         
     except Exception as e:
+        app.logger.error(f"Failed to stop session: {e}")
         return jsonify({"error": f"Failed to stop session: {str(e)}"}), 500
+
 
 @app.route("/attendance/<class_id>", methods=["GET"])
 def get_attendance_for_class(class_id):
     """Get attendance records for a specific class."""
     try:
         if not firebase_manager:
-            return jsonify({"error": "Firebase not initialized"}), 500
+            return jsonify({
+                "error": "Firebase not available",
+                "message": "Attendance data stored in CSV files only"
+            }), 503
         
         date = request.args.get('date')  # Optional date parameter
-        records = firebase_manager.get_attendance_for_class(class_id, date)
         
-        return jsonify({
-            "classId": class_id,
-            "date": date or datetime.now().strftime("%Y-%m-%d"),
-            "records": records,
-            "total_records": len(records)
-        })
+        try:
+            records = firebase_manager.get_attendance_for_class(class_id, date)
+            
+            return jsonify({
+                "classId": class_id,
+                "date": date or datetime.now().strftime("%Y-%m-%d"),
+                "records": records,
+                "total_records": len(records)
+            })
+        except Exception as e:
+            print(f"⚠️ Error getting attendance from Firebase: {e}")
+            return jsonify({
+                "error": "Failed to retrieve attendance",
+                "message": "Check CSV files for attendance data"
+            }), 500
         
     except Exception as e:
         return jsonify({"error": f"Failed to get attendance: {str(e)}"}), 500
+
 
 # ------------------------------
 # Route - Recognize image (frame)
@@ -280,9 +324,11 @@ def recognize_image_route():
             file.save(tmp.name)
             tmp_path = tmp.name
 
+
         # Call the recognition function from main.py
         resp = main.recognize_faces_from_image(tmp_path)
         result_json = parse_recognize_response(resp)
+
 
         # Determine classId for routing recognition to the correct session
         class_id = None
@@ -293,6 +339,7 @@ def recognize_image_route():
                 class_id = None
         if not class_id:
             class_id = request.args.get("classId")
+
 
         # If session active, parse recognized names and record them
         try:
@@ -311,7 +358,9 @@ def recognize_image_route():
             # Do not fail recognition if recording fails; log and continue
             app.logger.error("Failed to record recognition results: %s", str(e))
 
+
         return jsonify(result_json)
+
 
     except Exception as e:
         app.logger.error("Error in /recognize_image: %s\n%s", str(e), traceback.format_exc())
@@ -323,6 +372,7 @@ def recognize_image_route():
                 os.remove(tmp_path)
         except Exception:
             pass
+
 
 # ------------------------------
 # Student management endpoints
@@ -341,6 +391,7 @@ def add_student_route():
         images_b64 = []
         student_name = None
         class_id = "default"
+
 
         # Accept multipart/form-data (file upload) OR JSON with base64
         if request.files:
@@ -367,11 +418,14 @@ def add_student_route():
             if not images_b64 and (data or {}).get("image"):
                 images_b64 = [data.get("image")]
 
+
         if not student_name or not images_b64:
             return jsonify({"status": "error", "message": "Missing student_name or images"}), 400
 
+
         # Add student using existing function
         result = student_manage.add_student_from_api(student_name, images_b64)
+
 
         # Return original result to preserve response shape
         return result
@@ -380,6 +434,7 @@ def add_student_route():
         app.logger.error("add_student error: %s", traceback.format_exc())
         return jsonify({"status": "error", "message": str(e)}), 500
 
+
 @app.route("/remove_student/<student_name>", methods=["DELETE"])
 def remove_student_route(student_name):
     try:
@@ -387,15 +442,19 @@ def remove_student_route(student_name):
         
         # Also remove from Firebase if available
         if firebase_manager and result.get("status") == "success":
-            # Note: Firebase doesn't have a direct delete method in our current setup
-            # You might want to add a delete method to firebase_config.py
-            pass
+            try:
+                # Note: Firebase doesn't have a direct delete method in our current setup
+                # You might want to add a delete method to firebase_config.py
+                pass
+            except Exception as e:
+                print(f"⚠️ Error removing student from Firebase (ignored): {e}")
         
         return result
         
     except Exception as e:
         app.logger.error("remove_student error: %s", traceback.format_exc())
         return jsonify({"status": "error", "message": str(e)}), 500
+
 
 @app.route("/list_students", methods=["GET"])
 def list_students_route():
@@ -404,6 +463,7 @@ def list_students_route():
         return jsonify({"count": len(students), "students": students})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
+
 
 # ------------------------------
 # Embeddings management
@@ -417,11 +477,13 @@ def update_embeddings_route():
     if manage_embeddings is None:
         return jsonify({"status": "error", "message": "manage_embeddings is unavailable"}), 500
 
+
     try:
         data = request.get_json(silent=True) or {}
         n_aug = int(data.get("n_aug", 1))
         db_path = data.get("db_path", STUDENTS_DIR)
         emb_path = data.get("emb_path", EMBEDDINGS_PATH)
+
 
         # Call the function (this may take time)
         manage_embeddings(db_path=db_path, N_AUG=n_aug, emb_path=emb_path)
@@ -430,7 +492,6 @@ def update_embeddings_route():
         app.logger.error("update_embeddings error: %s", traceback.format_exc())
         return jsonify({"status": "error", "message": str(e)}), 500
 
-# (Scheduling endpoints removed)
 
 @app.route("/session_status", methods=["GET"])
 def session_status_route():
@@ -443,6 +504,7 @@ def session_status_route():
         app.logger.error("get_session_status error: %s", traceback.format_exc())
         return jsonify({"status": "error", "message": str(e)}), 500
 
+
 # ------------------------------
 # Attendance files listing
 # ------------------------------
@@ -453,6 +515,7 @@ def attendance_files_route():
         return jsonify({"files": files})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
+
 
 # ------------------------------
 # Endpoint to manually record recognition results (optional)
@@ -473,6 +536,7 @@ def record_recognition_route():
         app.logger.error("record_recognition error: %s", traceback.format_exc())
         return jsonify({"status": "error", "message": str(e)}), 500
 
+
 # ------------------------------
 # Serve embeddings file (download) - optional
 # ------------------------------
@@ -485,10 +549,12 @@ def download_embeddings():
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
+
 # ------------------------------
 # Run server
 # ------------------------------
 if __name__ == "__main__":
     # Run the Flask app
     print("Starting Smart Attendance System API with Firebase...")
+    print(f"Firebase status: {'✅ Connected' if firebase_manager else '⚠️ Disabled (using CSV fallback)'}")
     app.run(host="0.0.0.0", port=5000, debug=True)
