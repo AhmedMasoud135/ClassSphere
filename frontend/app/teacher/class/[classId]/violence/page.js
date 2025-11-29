@@ -62,7 +62,7 @@ export default function ViolenceDetectionPage() {
 
         try {
           const response = await fetch(
-            'http://127.0.0.1:5001/detect_frame',
+            'http://127.0.0.1:5002/detect_frame',
             {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -106,7 +106,7 @@ export default function ViolenceDetectionPage() {
     if (intervalRef.current) clearInterval(intervalRef.current);
 
     try {
-      const response = await fetch('http://127.0.0.1:5001/reset_buffer', {
+      const response = await fetch('http://127.0.0.1:5002/reset_buffer', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ classId }),
